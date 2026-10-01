@@ -5021,6 +5021,9 @@ function startLevel() {
   $('help').textContent = T('Elindeki harfi bir okla satıra ya da sütuna it. Sıra kayar, öbür uçtaki harf eline gelir. Satırda ya da sütunda, herhangi bir yönden okunan kelime oluşunca patlar!',
                             'Push your hand tile into a row or column with an arrow. The line shifts and the tile at the far end pops into your hand. Words in any direction along a row or column clear!');
   renderTargets(); setMsg(''); layout(); render({ intro: true });
+  // Taşlar alttan üste sıra sıra yere oturur: her sıra bir sonraki sesi çalar (fallKF'de yere değiş anı %60)
+  for (let k = 0; k < H; k++) SFX.play(k, .55, k * 55 + 60 + 420 * .6);
+  SFX.play(6, .7, 650 + 420 * .6); // el taşı
 }
 
 function renderTargets() {
@@ -5238,7 +5241,7 @@ function resolve() {
       ], { duration: 620, delay: i * 70, fill: 'both' }).onfinish = () => {
         f.remove();
         const s = slots[i];
-        if (s) { s.className = 'tslot filled land'; s.textContent = t.l; }
+        if (s) { s.className = 'tslot filled land'; s.textContent = t.l; SFX.play(Math.min(6, i), .8); }
       };
     });
 
