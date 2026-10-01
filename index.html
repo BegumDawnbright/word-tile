@@ -167,8 +167,8 @@ function startLevel() {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) grid[y][x] = newTile(Math.random() < .3);
   hand = newTile();
   $('board').innerHTML = '';
-  $('help').textContent = T('Elindeki harfi bir okla satıra ya da sütuna it. Sıra kayar, öbür uçtaki harf eline gelir. Satırda (soldan sağa) ya da sütunda (yukarıdan aşağı) kelime oluşunca patlar!',
-                            'Push your hand tile into a row or column with an arrow. The line shifts and the tile at the far end pops into your hand. Words in rows (left→right) or columns (top→down) clear!');
+  $('help').textContent = T('Elindeki harfi bir okla satıra ya da sütuna it. Sıra kayar, öbür uçtaki harf eline gelir. Satırda ya da sütunda, herhangi bir yönden okunan kelime oluşunca patlar!',
+                            'Push your hand tile into a row or column with an arrow. The line shifts and the tile at the far end pops into your hand. Words in any direction along a row or column clear!');
   renderTargets(); setMsg(''); layout(); render();
 }
 
@@ -267,6 +267,8 @@ function findWord() {
     if (t && !t.hidden) run.push(t); else { if (run.length) lines.push(run); run = []; } }); };
   grid.forEach(r => scan(r));
   for (let x = 0; x < W; x++) scan(grid.map(r => r[x]));
+  // Ters yönler: sağdan sola ve aşağıdan yukarı
+  lines.slice().forEach(l => lines.push(l.slice().reverse()));
   let best = null;
   for (const line of lines) {
     const str = line.map(t => t.l).join('');
