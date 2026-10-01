@@ -16,8 +16,13 @@
   button.on { background:var(--accent); color:#3a2600; }
   h1 { margin:0; font-size:24px; letter-spacing:2px; color:var(--accent); text-shadow:0 3px 0 #b5700f; }
 
-  #targets { background:var(--panel); border-radius:14px; padding:10px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
-  .tword { display:flex; gap:3px; }
+  #targets { background:var(--panel); border-radius:14px; padding:10px; display:flex; flex-direction:column; gap:8px; }
+  .trow { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .clue { font-size:13px; font-weight:600; color:#d6ddf7; flex:1; }
+  .trow.ok .clue { color:var(--good); text-decoration:line-through; opacity:.7; }
+  .tword { display:flex; gap:3px; flex-shrink:0; }
+  .tslot.open { color:var(--accent); background:#2a3c85; animation:pop .4s; }
+  @keyframes pop { 50% { transform:scale(1.3); } }
   .tslot { width:28px; height:28px; border-radius:6px; background:#1c2d6e; display:flex; align-items:center; justify-content:center;
            font-weight:900; color:#6f80c0; font-size:14px; }
   .tslot.filled { background:var(--good); color:#0d3a20; }
@@ -69,7 +74,7 @@
     <span class="pill" id="score"></span>
   </div>
   <div id="targets"></div>
-  <div id="bonusWrap"><span>Bonus</span><div id="bonusBar"><div id="bonusFill"></div></div><span id="bonusTxt">0/3</span></div>
+  <div id="bonusWrap"><span>💡 Bonus</span><div id="bonusBar"><div id="bonusFill"></div></div><span id="bonusTxt">0/3</span></div>
   <div id="extraList"></div>
   <div id="board"></div>
   <div id="msg"></div>
@@ -82,10 +87,10 @@ const DATA = {
   tr: {
     alphabet: 'AAAAAEEEEEİİİIIKKKLLLRRRNNNMMMTTTSSUUUOOYYDDBBÜÜŞÇGĞPZCHÖVF',
     levels: [
-      ['ELMA','KAPI','KUŞ'],
-      ['ARABA','KALEM','OKUL'],
-      ['KİTAP','MASA','ÇİÇEK','YOL'],
-      ['DENİZ','GÜNEŞ','BULUT','KAR'],
+      [['KUŞ','Kanadı var, uçar, ağaçta yuva yapar'],['KAPI','Açılır kapanır, eve girerken çalınır'],['ELMA','Kırmızısı da olur yeşili de, Newton\'un kafasına düşen']],
+      [['OKUL','Zil çalar, ders başlar'],['KALEM','Yazar ama konuşmaz, ucu açılır'],['ARABA','Dört tekerlekli, yolda gider, korna çalar']],
+      [['YOL','Üstünde yürünür, bir yerden bir yere götürür'],['MASA','Dört ayağı var ama yürümez, üstünde yemek yenir'],['KİTAP','Sayfaları var, açınca hikâye anlatır'],['ÇİÇEK','Bahçede açar, güzel kokar, arı sever']],
+      [['KAR','Kışın gökten beyaz beyaz yağar'],['DENİZ','Mavi ve tuzlu, dalgası olur'],['GÜNEŞ','Gündüz gökte parlar, bizi ısıtır'],['BULUT','Gökte süzülür, yağmur getirir']],
     ],
     words: `BAL KAR YOL GÖZ KOL SÜT ÇAY TAŞ KUŞ BAŞ DAĞ YAŞ AŞK KİM ARI KAZ SAZ TUZ YAZ KIŞ KUM DUT NAR TOP KAŞ SAÇ BEL DİŞ ATA ANA
     ADA ALA ELA ERİK İLK SON YENİ ESKİ ELMA KAPI MASA OKUL ARABA KALEM KİTAP ÇİÇEK DENİZ GÜNEŞ BULUT KEDİ KÖPEK BALIK EKMEK
@@ -102,10 +107,10 @@ const DATA = {
   en: {
     alphabet: 'EEEEEEAAAAAIIIIOOOOTTTTNNNSSSRRRHHLLDDCCUUMMPPGGBYWFKV',
     levels: [
-      ['CAT','TREE','SUN'],
-      ['APPLE','HOUSE','BIRD'],
-      ['WATER','LIGHT','DOOR','MILK'],
-      ['GARDEN','STONE','CLOUD','RAIN'],
+      [['CAT','Says meow and chases mice'],['SUN','Shines in the sky during the day'],['TREE','Has leaves and branches, grows in a forest']],
+      [['BIRD','Has wings and builds a nest'],['APPLE','Red or green fruit, keeps the doctor away'],['HOUSE','You live in it, it has a roof and doors']],
+      [['DOOR','You open it to enter a room'],['MILK','White drink that comes from a cow'],['WATER','You drink it, fish swim in it'],['LIGHT','Turn it on when it gets dark']],
+      [['RAIN','Falls from clouds and makes you wet'],['STONE','Hard and heavy, found on the ground'],['CLOUD','White and fluffy, floats in the sky'],['GARDEN','Flowers and vegetables grow here, behind the house']],
     ],
     words: `CAT DOG SUN MOON STAR TREE BIRD FISH APPLE HOUSE WATER LIGHT DOOR MILK GARDEN STONE CLOUD RAIN SNOW WIND FIRE
     EARTH AIR SEA LAKE RIVER HILL ROAD CAR BUS TRAIN BOAT SHIP PLANE BOOK PEN TABLE CHAIR BED LAMP CUP PLATE SPOON FORK
@@ -122,7 +127,7 @@ const DATA = {
 const W = 5, H = 6, MIN_EXTRA = 3, BONUS_NEED = 3, MOVES = 35;
 
 let lang = 'tr', levelIdx = 0, score = 0;
-let grid, hand, targets, done, moves, bonus, extras, dict, busy = false, uid = 0, S = 50;
+let grid, hand, targets, clues, opened, done, moves, bonus, extras, dict, busy = false, uid = 0, S = 50;
 const G = 5;
 const $ = id => document.getElementById(id);
 const T = (tr, en) => lang === 'tr' ? tr : en;
@@ -131,7 +136,7 @@ const allTiles = () => grid.flat().filter(Boolean).concat(hand ? [hand] : []);
 function buildDict() {
   const d = DATA[lang];
   dict = new Set(d.words.split(/\s+/).filter(Boolean));
-  d.levels.flat().forEach(w => dict.add(w));
+  d.levels.flat().forEach(([w]) => dict.add(w));
 }
 
 // Hedeflerde eksik harflere ağırlık veren üretici
@@ -153,7 +158,9 @@ const handPos = () => ({ x: (W - 1) / 2, y: H + 1.25 });
 function startLevel() {
   buildDict();
   const lv = DATA[lang].levels;
-  targets = lv[levelIdx % lv.length];
+  targets = lv[levelIdx % lv.length].map(x => x[0]);
+  clues = lv[levelIdx % lv.length].map(x => x[1]);
+  opened = targets.map(() => new Set());
   done = targets.map(() => false);
   moves = MOVES; bonus = 0; extras = []; busy = false; grid = null; hand = null;
   grid = Array.from({ length: H }, () => Array(W).fill(null));
@@ -167,7 +174,8 @@ function startLevel() {
 
 function renderTargets() {
   $('targets').innerHTML = targets.map((w, i) =>
-    `<div class="tword" data-i="${i}">${[...w].map(c => `<div class="tslot ${done[i] ? 'filled' : ''}">${done[i] ? c : ''}</div>`).join('')}</div>`).join('');
+    `<div class="trow ${done[i] ? 'ok' : ''}"><span class="clue">${clues[i]}</span><div class="tword" data-i="${i}">${[...w].map((c, k) =>
+      done[i] ? `<div class="tslot filled">${c}</div>` : opened[i].has(k) ? `<div class="tslot open">${c}</div>` : `<div class="tslot"></div>`).join('')}</div></div>`).join('');
 }
 
 // Sabit parçalar: arka plan, oklar, el yuvası
@@ -299,7 +307,7 @@ function resolve() {
 
     setTimeout(() => {
       if (m.ti >= 0) done[m.ti] = true;
-      else if (++bonus >= BONUS_NEED) { bonus = 0; moves += 3; setMsg(T('Bonus! +3 hamle', 'Bonus! +3 moves'), 'var(--accent)'); }
+      else if (++bonus >= BONUS_NEED) { bonus = 0; openLetter(); }
       // Boşalan yerler: üstteki harfler aşağı düşer, tepeden yeni harfler gelir. Komşu gizliler açılır.
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid[y][x] && ids.has(grid[y][x].id)) {
         [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx, dy]) => { const n = grid[y + dy] && grid[y + dy][x + dx]; if (n) n.hidden = false; });
@@ -316,6 +324,16 @@ function resolve() {
       setTimeout(resolve, 450); // zincirleme kelimeler
     }, 750 + m.tiles.length * 70);
   }, 350);
+}
+
+// Bonus dolunca bitmemiş bir hedefin rastgele kapalı bir harfi görünür olur (ipucu)
+function openLetter() {
+  const c = [];
+  targets.forEach((w, i) => { if (!done[i]) [...w].forEach((_, k) => { if (!opened[i].has(k)) c.push([i, k]); }); });
+  if (!c.length) return;
+  const [i, k] = c[Math.random() * c.length | 0];
+  opened[i].add(k);
+  setMsg(T('💡 Harf açıldı: ', '💡 Letter revealed: ') + targets[i][k], 'var(--accent)');
 }
 
 function setMsg(t, c) { $('msg').textContent = t; $('msg').style.color = c || '#fff'; }
