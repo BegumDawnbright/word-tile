@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Tile</title>
+<style>
+  :root { --bg:#14317a; --bg2:#0d2160; --panel:#0b1a4d; --tile:#f6e7c8; --tileTxt:#3a2a14; --accent:#ffc93c; --good:#5fd38d; --bad:#ff6b6b; }
+  * { box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:radial-gradient(circle at 50% 20%, var(--bg), var(--bg2)); color:#fff;
+         font-family:system-ui,sans-serif; min-height:100vh; display:flex; justify-content:center; }
+  #game { width:100%; max-width:480px; padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+  .bar { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .pill { background:var(--panel); padding:6px 12px; border-radius:20px; font-weight:700; font-size:14px; }
+  button { font:inherit; cursor:pointer; border:none; border-radius:10px; padding:7px 12px; font-weight:800; background:var(--panel); color:#fff; }
+  button.on { background:var(--accent); color:#3a2600; }
+  h1 { margin:0; font-size:24px; letter-spacing:2px; color:var(--accent); text-shadow:0 3px 0 #b5700f; }
+
+  #targets { background:var(--panel); border-radius:14px; padding:10px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+  .tword { display:flex; gap:3px; }
+  .tslot { width:28px; height:28px; border-radius:6px; background:#1c2d6e; display:flex; align-items:center; justify-content:center;
+           font-weight:900; color:#6f80c0; font-size:14px; }
+  .tslot.filled { background:var(--good); color:#0d3a20; }
+
+  #bonusWrap { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; }
+  #bonusBar { flex:1; height:12px; background:var(--panel); border-radius:6px; overflow:hidden; }
+  #bonusFill { height:100%; width:0; background:linear-gradient(90deg,#9b7bff,#ff7bd5); transition:width .4s; }
+  #extraList { font-size:12px; color:#b9c4f0; min-height:16px; text-align:center; }
+
+  #board { position:relative; margin:0 auto; }
+  #boardBg { position:absolute; background:var(--panel); border-radius:16px; border:3px solid #2c4bb0; }
+  .arrow { position:absolute; display:flex; align-items:center; justify-content:center; border-radius:10px; cursor:pointer;
+           color:var(--accent); font-size:20px; font-weight:900; background:rgba(255,201,60,.08); transition:background .15s; }
+  .arrow:hover { background:rgba(255,201,60,.3); }
+  #handSlot { position:absolute; border-radius:12px; border:3px dashed var(--accent); }
+  #handLbl { position:absolute; font-size:12px; font-weight:800; color:var(--accent); text-align:center; }
+  #board .tile { position:absolute; transition:left .3s ease, top .3s ease, transform .15s; }
+  #board .tile.hand { box-shadow:0 0 0 3px var(--accent), inset 0 -4px 0 #d3b47c; z-index:5; }
+  .tile { width:var(--s); height:var(--s); border-radius:9px; background:var(--tile); color:var(--tileTxt);
+          display:flex; align-items:center; justify-content:center; font-size:calc(var(--s) * .5); font-weight:900;
+          box-shadow:inset 0 -4px 0 #d3b47c; transition:transform .15s; }
+  .tile.hidden { background:#6c7aa8; color:#c8d0ee; box-shadow:inset 0 -4px 0 #4b5684; }
+  .tile.sel { transform:translateY(-8px) scale(1.08); box-shadow:0 0 0 3px var(--accent), inset 0 -4px 0 #d3b47c; }
+  .tile.drop { animation:drop .4s ease-out; }
+  .tile.hit { background:var(--good); color:#0d3a20; box-shadow:inset 0 -4px 0 #2f9a5c; }
+  .tile.extra { background:#ff9be8; color:#5a0a46; }
+  @keyframes drop { from { transform:translateY(-260px); opacity:0; } to { transform:none; opacity:1; } }
+
+  #msg { text-align:center; min-height:22px; font-weight:800; }
+  .fly { position:fixed; z-index:50; pointer-events:none; transition:all .65s cubic-bezier(.5,-0.4,.4,1.2); }
+  .help { font-size:12px; color:#b9c4f0; text-align:center; }
+
+  #overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center; z-index:100; }
+  #overlay .card { background:var(--panel); padding:24px; border-radius:16px; text-align:center; max-width:300px; border:3px solid #2c4bb0; }
+</style>
+</head>
+<body>
+<div id="game">
+  <div class="bar">
+    <h1>WORD TILE</h1>
+    <div style="display:flex;gap:6px">
+      <button id="langTR" class="on">TR</button>
+      <button id="langEN">EN</button>
+    </div>
+  </div>
+  <div class="bar">
+    <span class="pill" id="lvl">Level 1</span>
+    <span class="pill" id="moves"></span>
+    <span class="pill" id="score"></span>
+  </div>
+  <div id="targets"></div>
+  <div id="bonusWrap"><span>Bonus</span><div id="bonusBar"><div id="bonusFill"></div></div><span id="bonusTxt">0/3</span></div>
+  <div id="extraList"></div>
+  <div id="board"></div>
+  <div id="msg"></div>
+  <div class="help" id="help"></div>
+</div>
+<div id="overlay"><div class="card"><h2 id="ovTitle"></h2><p id="ovText"></p><button id="ovBtn" class="on"></button></div></div>
+
+<script>
+const DATA = {
+  tr: {
+    alphabet: 'AAAAAEEEEEİİİIIKKKLLLRRRNNNMMMTTTSSUUUOOYYDDBBÜÜŞÇGĞPZCHÖVF',
+    levels: [
+      ['ELMA','KAPI','KUŞ'],
+      ['ARABA','KALEM','OKUL'],
+      ['KİTAP','MASA','ÇİÇEK','YOL'],
+      ['DENİZ','GÜNEŞ','BULUT','KAR'],
+    ],
+    words: `BAL KAR YOL GÖZ KOL SÜT ÇAY TAŞ KUŞ BAŞ DAĞ YAŞ AŞK KİM ARI KAZ SAZ TUZ YAZ KIŞ KUM DUT NAR TOP KAŞ SAÇ BEL DİŞ ATA ANA
+    ADA ALA ELA ERİK İLK SON YENİ ESKİ ELMA KAPI MASA OKUL ARABA KALEM KİTAP ÇİÇEK DENİZ GÜNEŞ BULUT KEDİ KÖPEK BALIK EKMEK
+    SABAH AKŞAM GECE OYUN KUTU DOLAP KAŞIK ÇATAL BIÇAK TABAK BARDAK YATAK HALI PERDE DUVAR TAVAN BAHÇE AĞAÇ YAPRAK ORMAN
+    NEHİR GÖL DERE TEPE OVA KÖY SOKAK ODA KAPAK KALE KULE SARAY KİLİT PARA KART BİLET TREN UÇAK GEMİ OTO TAKSİ USTA ANNE
+    BABA ABLA ABİ DEDE NİNE AMCA DAYI HALA SEVGİ MUTLU MAVİ YEŞİL SARI BEYAZ SİYAH MOR PEMBE KAHVE LİMON KİRAZ ÜZÜM ARMUT
+    MUZ KAVUN ŞEKER TATLI ACI EKŞİ LALE GÜL AYI KURT TİLKİ ASLAN KAPLAN FİL KOYUN KEÇİ İNEK TAVUK HOROZ ÖRDEK ALAN SAAT
+    YIL HAFTA GÜN AYNA KALP KAN BURUN KULAK AĞIZ DİZ AYAK SES SÖZ İSİM ADAM KADIN ÇOCUK BEBEK OKU YAZI RESİM MÜZİK ŞARKI
+    DANS ATEŞ TOPRAK DEMİR ALTIN TAKI SALI CUMA PAZAR NİSAN MAYIS EKİM KASIM OCAK MART KASA KARE NOKTA SATIR DERS SINAV
+    NOT KAĞIT SİLGİ TAHTA SIRA MASAL ROMAN ŞİİR İLAÇ ÇORBA PİLAV MAKAS İĞNE ETEK ÇANTA AKIL ALIN ARA ARKA ASKER BAKIR
+    BALE BARIŞ KAVGA ELA ALT ÜST SAĞ SOL ORTA KAT KASA KİRA TAM YARIM AKİL ARAÇ İLAN İNAT KANAT KART KAT KİL LAMA MAL
+    MERA NAL NANE ORAN SAKA SALAK TARLA TEL TELA TİK ÜNLÜ YAKA YARA YATAK İMKAN KUMAŞ KUZU LOKUM`
+  },
+  en: {
+    alphabet: 'EEEEEEAAAAAIIIIOOOOTTTTNNNSSSRRRHHLLDDCCUUMMPPGGBYWFKV',
+    levels: [
+      ['CAT','TREE','SUN'],
+      ['APPLE','HOUSE','BIRD'],
+      ['WATER','LIGHT','DOOR','MILK'],
+      ['GARDEN','STONE','CLOUD','RAIN'],
+    ],
+    words: `CAT DOG SUN MOON STAR TREE BIRD FISH APPLE HOUSE WATER LIGHT DOOR MILK GARDEN STONE CLOUD RAIN SNOW WIND FIRE
+    EARTH AIR SEA LAKE RIVER HILL ROAD CAR BUS TRAIN BOAT SHIP PLANE BOOK PEN TABLE CHAIR BED LAMP CUP PLATE SPOON FORK
+    KNIFE BREAD CAKE TEA RICE SALT SUGAR HONEY EGG MEAT CORN BEAN PEA NUT LEMON GRAPE PEAR PLUM PEACH MELON RED BLUE GREEN
+    PINK GOLD BLACK WHITE BROWN HAND FOOT HEAD EYE EAR NOSE LIP ARM LEG TOE HAIR FACE HEART LOVE HOPE TIME DAY NIGHT
+    WEEK YEAR HOUR OLD NEW BIG HOT COLD WARM COOL TALL LONG FAST SLOW HAPPY SAD KING QUEEN HERO MAN BOY GIRL BABY MOM DAD
+    SON AUNT FRIEND RAT BAT HAT MAT SAT PAT TEN NET PET SET WET GET LET MET BET HEN PIG COW HORSE SHEEP GOAT LION TIGER
+    BEAR WOLF FOX DEER DUCK OWL ANT BEE FLY ROSE LILY LEAF ROOT SEED SOIL SAND ROCK IRON TIN GAME PLAY TOY BALL KITE SONG
+    SING DANCE READ WRITE DRAW RUN WALK JUMP SWIM EAT DRINK SLEEP DREAM WAKE OPEN SHUT NOTE TONE NOSE RISE RIDE SIDE TIDE
+    HIDE TIRE TILE TALE SALE SEAL REAL DEAL MEAL HEAL HEAT SEAT NEAT ATE ONE TWO SIX NINE TOP POT DOT LOT NOT ROT TAN CAN
+    FAN PAN RAN VAN DEN END AND ART ARE ERA OAR ORE TEN TIN TON SIT HIT LIT PIT FIT KIT NIT RID LID HID AID AIM RIM DIM HIM`
+  }
+};
+const W = 5, H = 6, MIN_EXTRA = 3, BONUS_NEED = 3, MOVES = 35;
+
+let lang = 'tr', levelIdx = 0, score = 0;
+let grid, hand, targets, done, moves, bonus, extras, dict, busy = false, uid = 0, S = 50;
+const G = 5;
+const $ = id => document.getElementById(id);
+const T = (tr, en) => lang === 'tr' ? tr : en;
+const allTiles = () => grid.flat().filter(Boolean).concat(hand ? [hand] : []);
+
+function buildDict() {
+  const d = DATA[lang];
+  dict = new Set(d.words.split(/\s+/).filter(Boolean));
+  d.levels.flat().forEach(w => dict.add(w));
+}
+
+// Hedeflerde eksik harflere ağırlık veren üretici
+function randLetter() {
+  const need = [];
+  targets.forEach((w, i) => { if (!done[i]) need.push(...w); });
+  const onBoard = grid ? allTiles().map(t => t.l) : [];
+  const missing = need.filter(c => { const k = onBoard.indexOf(c); if (k >= 0) { onBoard.splice(k, 1); return false; } return true; });
+  if (missing.length && Math.random() < 0.65) return missing[Math.random() * missing.length | 0];
+  if (need.length && Math.random() < 0.35) return need[Math.random() * need.length | 0];
+  const a = DATA[lang].alphabet; return a[Math.random() * a.length | 0];
+}
+const newTile = (hidden = false, from = null) => ({ id: ++uid, l: randLetter(), hidden, from });
+
+// Sahne koordinatları: grid (0..W-1, 0..H-1), çevresinde ok halkası, altta el
+const px = x => (x + 1) * (S + G);
+const handPos = () => ({ x: (W - 1) / 2, y: H + 1.25 });
+
+function startLevel() {
+  buildDict();
+  const lv = DATA[lang].levels;
+  targets = lv[levelIdx % lv.length];
+  done = targets.map(() => false);
+  moves = MOVES; bonus = 0; extras = []; busy = false; grid = null; hand = null;
+  grid = Array.from({ length: H }, () => Array(W).fill(null));
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) grid[y][x] = newTile(Math.random() < .3);
+  hand = newTile();
+  $('board').innerHTML = '';
+  renderTargets(); layout(); render(); setMsg('');
+  $('help').textContent = T('Elindeki harfi bir okla satıra ya da sütuna it. Sıra kayar, öbür uçtaki harf eline gelir. Satırda (soldan sağa) ya da sütunda (yukarıdan aşağı) kelime oluşunca patlar!',
+                            'Push your hand tile into a row or column with an arrow. The line shifts and the tile at the far end pops into your hand. Words in rows (left→right) or columns (top→down) clear!');
+}
+
+function renderTargets() {
+  $('targets').innerHTML = targets.map((w, i) =>
+    `<div class="tword" data-i="${i}">${[...w].map(c => `<div class="tslot ${done[i] ? 'filled' : ''}">${done[i] ? c : ''}</div>`).join('')}</div>`).join('');
+}
+
+// Sabit parçalar: arka plan, oklar, el yuvası
+function layout() {
+  S = Math.min(56, Math.floor((Math.min(window.innerWidth, 480) - 32) / (W + 2) - G));
+  const b = $('board'); b.innerHTML = '';
+  b.style.width = (W + 2) * (S + G) + 'px';
+  b.style.height = (H + 3) * (S + G) + 'px';
+  const bg = document.createElement('div'); bg.id = 'boardBg';
+  Object.assign(bg.style, { left: px(0) - 8 + 'px', top: px(0) - 8 + 'px', width: W * (S + G) + 11 + 'px', height: H * (S + G) + 11 + 'px' });
+  b.appendChild(bg);
+  const arrow = (x, y, ch, fn) => {
+    const a = document.createElement('div'); a.className = 'arrow'; a.textContent = ch;
+    Object.assign(a.style, { left: px(x) + 'px', top: px(y) + 'px', width: S + 'px', height: S + 'px' });
+    a.onclick = fn; b.appendChild(a);
+  };
+  for (let y = 0; y < H; y++) { arrow(-1, y, '▶', () => push('L', y)); arrow(W, y, '◀', () => push('R', y)); }
+  for (let x = 0; x < W; x++) { arrow(x, -1, '▼', () => push('T', x)); arrow(x, H, '▲', () => push('B', x)); }
+  const hp = handPos(), slot = document.createElement('div'); slot.id = 'handSlot';
+  Object.assign(slot.style, { left: px(hp.x) - 5 + 'px', top: px(hp.y) - 5 + 'px', width: S + 4 + 'px', height: S + 4 + 'px' });
+  b.appendChild(slot);
+  const lbl = document.createElement('div'); lbl.id = 'handLbl'; lbl.textContent = T('ELİN', 'HAND');
+  Object.assign(lbl.style, { left: px(hp.x) + 'px', top: px(hp.y) + S + 4 + 'px', width: S + 'px' });
+  b.appendChild(lbl);
+}
+
+function tileEl(t, x = 0, y = 0) {
+  let e = document.querySelector(`#board .tile[data-id="${t.id}"]`);
+  if (!e) {
+    e = document.createElement('div'); e.className = 'tile'; e.dataset.id = t.id;
+    Object.assign(e.style, { width: S + 'px', height: S + 'px', fontSize: S * .5 + 'px' });
+    const f = t.from || { x, y };
+    e.style.left = px(f.x) + 'px'; e.style.top = px(f.y) + 'px';
+    if (!t.from) e.style.transition = 'none';
+    $('board').appendChild(e); e.offsetWidth; e.style.transition = '';
+  }
+  return e;
+}
+
+function render() {
+  $('lvl').textContent = 'Level ' + (levelIdx + 1);
+  $('moves').textContent = T('Hamle: ', 'Moves: ') + moves;
+  $('score').textContent = T('Puan: ', 'Score: ') + score;
+  $('bonusFill').style.width = (bonus / BONUS_NEED * 100) + '%';
+  $('bonusTxt').textContent = bonus + '/' + BONUS_NEED;
+  $('extraList').textContent = extras.length ? '✨ ' + extras.join(', ') : '';
+  const live = new Set();
+  const place = (t, x, y, isHand) => {
+    const e = tileEl(t, x, y); live.add(String(t.id));
+    e.style.left = px(x) + 'px'; e.style.top = px(y) + 'px';
+    e.classList.toggle('hidden', t.hidden); e.classList.toggle('hand', isHand);
+    e.textContent = t.hidden ? '?' : t.l; t.from = null;
+  };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid[y][x]) place(grid[y][x], x, y, false);
+  if (hand) { const hp = handPos(); place(hand, hp.x, hp.y, true); }
+  document.querySelectorAll('#board .tile').forEach(e => { if (!live.has(e.dataset.id)) e.remove(); });
+}
+
+// İtme: L=soldan sağa, R=sağdan sola, T=yukarıdan aşağı, B=aşağıdan yukarı. Öbür uçtaki tile ele gelir.
+function push(dir, i) {
+  if (busy || !hand) return;
+  busy = true; moves--;
+  const h = hand; h.hidden = false;
+  let out;
+  if (dir === 'L') { const r = grid[i]; out = r.pop(); r.unshift(h); }
+  if (dir === 'R') { const r = grid[i]; out = r.shift(); r.push(h); }
+  if (dir === 'T' || dir === 'B') {
+    const c = grid.map(r => r[i]);
+    if (dir === 'T') { out = c.pop(); c.unshift(h); } else { out = c.shift(); c.push(h); }
+    c.forEach((t, y) => grid[y][i] = t);
+  }
+  // Kayan sıradaki gizli harfler açılır
+  if (dir === 'L' || dir === 'R') grid[i].forEach(t => t.hidden = false); else grid.forEach(r => r[i].hidden = false);
+  out.hidden = false; hand = out;
+  render();
+  setTimeout(() => { busy = false; resolve(); }, 330);
+}
+
+// Satırlarda (soldan sağa) ve sütunlarda (yukarıdan aşağı) kelime ara; gizli harfler diziyi böler
+function findWord() {
+  const lines = [];
+  const scan = ts => { let run = []; ts.concat([null]).forEach(t => {
+    if (t && !t.hidden) run.push(t); else { if (run.length) lines.push(run); run = []; } }); };
+  grid.forEach(r => scan(r));
+  for (let x = 0; x < W; x++) scan(grid.map(r => r[x]));
+  let best = null;
+  for (const line of lines) {
+    const str = line.map(t => t.l).join('');
+    for (let i = 0; i < str.length; i++) for (let j = i + 2; j <= str.length; j++) {
+      const w = str.slice(i, j);
+      const ti = targets.findIndex((x, k) => !done[k] && x === w);
+      const isExtra = ti < 0 && w.length >= MIN_EXTRA && dict.has(w) && !extras.includes(w);
+      if (ti < 0 && !isExtra) continue;
+      const cand = { w, tiles: line.slice(i, j), ti, prio: (ti >= 0 ? 100 : 0) + w.length };
+      if (!best || cand.prio > best.prio) best = cand;
+    }
+  }
+  return best;
+}
+
+function resolve() {
+  const m = findWord();
+  if (!m) { checkEnd(); return; }
+  busy = true;
+  const ids = new Set(m.tiles.map(t => t.id));
+  m.tiles.forEach(t => tileEl(t).classList.add(m.ti >= 0 ? 'hit' : 'extra'));
+
+  setTimeout(() => {
+    let dests;
+    if (m.ti >= 0) {
+      dests = [...document.querySelectorAll(`.tword[data-i="${m.ti}"] .tslot`)].map(s => s.getBoundingClientRect());
+      score += m.w.length * 20; setMsg('🎯 ' + m.w, 'var(--good)');
+    } else {
+      const r = $('bonusBar').getBoundingClientRect();
+      dests = [{ left: r.left + r.width * (bonus / BONUS_NEED), top: r.top - 10, width: 26, height: 26, fade: true }];
+      score += m.w.length * 10; extras.push(m.w); setMsg('✨ ' + m.w + ' +' + m.w.length * 10, '#ff9be8');
+    }
+    m.tiles.forEach((t, i) => {
+      const e = tileEl(t), r = e.getBoundingClientRect(), f = e.cloneNode(true);
+      f.className = e.className + ' fly'; f.style.position = 'fixed';
+      Object.assign(f.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+      document.body.appendChild(f); e.remove();
+      setTimeout(() => {
+        const d = dests[i] || dests[dests.length - 1];
+        Object.assign(f.style, { left: d.left + 'px', top: d.top + 'px', width: d.width + 'px', height: d.height + 'px', fontSize: '14px', opacity: d.fade ? 0 : 1 });
+      }, 20 + i * 70);
+      setTimeout(() => f.remove(), 800 + i * 70);
+    });
+
+    setTimeout(() => {
+      if (m.ti >= 0) done[m.ti] = true;
+      else if (++bonus >= BONUS_NEED) { bonus = 0; moves += 3; setMsg(T('Bonus! +3 hamle', 'Bonus! +3 moves'), 'var(--accent)'); }
+      // Boşalan yerler: üstteki harfler aşağı düşer, tepeden yeni harfler gelir. Komşu gizliler açılır.
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid[y][x] && ids.has(grid[y][x].id)) {
+        [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx, dy]) => { const n = grid[y + dy] && grid[y + dy][x + dx]; if (n) n.hidden = false; });
+        grid[y][x] = null;
+      }
+      for (let x = 0; x < W; x++) {
+        const col = grid.map(r => r[x]).filter(Boolean);
+        const missing = H - col.length;
+        const fresh = Array.from({ length: missing }, (_, k) => newTile(false, { x, y: -1 - (missing - k) }));
+        fresh.concat(col).forEach((t, y) => grid[y][x] = t);
+      }
+      renderTargets(); render();
+      busy = false;
+      setTimeout(resolve, 450); // zincirleme kelimeler
+    }, 750 + m.tiles.length * 70);
+  }, 350);
+}
+
+function setMsg(t, c) { $('msg').textContent = t; $('msg').style.color = c || '#fff'; }
+
+function checkEnd() {
+  if (done.every(Boolean)) show(T('Tebrikler!', 'Level Complete!'), T('Kalan hamle bonusu: +', 'Moves bonus: +') + moves * 5,
+                                T('Sonraki Level', 'Next Level'), () => { score += moves * 5; levelIdx++; startLevel(); });
+  else if (moves <= 0) show(T('Hamle bitti', 'Out of moves'), '', T('Tekrar Dene', 'Retry'), startLevel);
+}
+function show(t, p, btn, cb) {
+  $('ovTitle').textContent = t; $('ovText').textContent = p; $('ovBtn').textContent = btn;
+  $('overlay').style.display = 'flex';
+  $('ovBtn').onclick = () => { $('overlay').style.display = 'none'; cb(); };
+}
+function setLang(l) {
+  lang = l; levelIdx = 0; score = 0;
+  $('langTR').classList.toggle('on', l === 'tr'); $('langEN').classList.toggle('on', l === 'en');
+  startLevel();
+}
+$('langTR').onclick = () => setLang('tr');
+$('langEN').onclick = () => setLang('en');
+window.addEventListener('resize', () => { layout(); document.querySelectorAll('#board .tile').forEach(e=>e.remove()); render(); });
+startLevel();
+</script>
+</body>
+</html>
